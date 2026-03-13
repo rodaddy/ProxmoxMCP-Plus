@@ -1,5 +1,7 @@
 # ProxmoxMCP-Plus
 
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/rodaddy)
+
 An enhanced Python-based Model Context Protocol (MCP) server for interacting with Proxmox virtualization platforms. This project extends [canvrno/ProxmoxMCP](https://github.com/canvrno/ProxmoxMCP) with additional features including complete OpenAPI integration and expanded virtualization management capabilities.
 
 ## Acknowledgments
