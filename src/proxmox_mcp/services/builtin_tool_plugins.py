@@ -719,3 +719,69 @@ class BackupToolsPlugin(RegistryPluginBase):
                 volid=volid,
                 approval_token=approval_token,
             )
+
+
+class StreamingExecToolsPlugin(RegistryPluginBase):
+    """Plugin for cluster-aware streaming exec tools (ported from rodaddy/proxmox-skill)."""
+
+    def register(self, server: Any) -> None:
+        from proxmox_mcp.tools.definitions import (
+            EXECUTE_CONTAINER_COMMAND_STREAMING_DESC,
+            EXECUTE_NODE_COMMAND_DESC,
+        )
+
+        # Only register if SSH is configured AND streaming_exec_tools exists
+        if not hasattr(server, "streaming_exec_tools") or server.streaming_exec_tools is None:
+            server.logger.info(
+                "Streaming exec tools not available (requires SSH config + cluster SSH client)"
+            )
+            return
+
+        server.logger.info("Registering cluster-aware streaming exec tools")
+
+        @server.mcp.tool(description=EXECUTE_CONTAINER_COMMAND_STREAMING_DESC)
+        def execute_container_command_streaming(
+            vmid: Annotated[int, Field(description="Container VMID (e.g. 101)")],
+            command: Annotated[str, Field(description="Shell command to run (e.g. 'uname -a', 'df -h')")],
+            approval_token: Annotated[Optional[str], Field(description="Optional approval token if command policy requires it", default=None)] = None,
+        ) -> Any:
+            return self._wrap_sync(
+                server,
+                "execute_container_command_streaming",
+                server.streaming_exec_tools.execute_container_command_streaming,
+            )(vmid=vmid, command=command, approval_token=approval_token)
+
+        @server.mcp.tool(description=EXECUTE_NODE_COMMAND_DESC)
+        def execute_node_command(
+            node: Annotated[str, Field(description="Proxmox node name (e.g. 'pve1')")],
+            command: Annotated[str, Field(description="Shell command to run on the node (e.g. 'uptime', 'df -h')")],
+            approval_token: Annotated[Optional[str], Field(description="Optional approval token if command policy requires it", default=None)] = None,
+        ) -> Any:
+            return self._wrap_sync(
+                server,
+                "execute_node_command",
+                server.streaming_exec_tools.execute_node_command,
+            )(node=node, command=command, approval_token=approval_token)
+
+
+class MonitorToolsPlugin(RegistryPluginBase):
+    """Plugin for cluster monitoring tools (ported from rodaddy/proxmox-skill)."""
+
+    def register(self, server: Any) -> None:
+        from proxmox_mcp.tools.definitions import GET_CLUSTER_OVERVIEW_DESC
+
+        if not hasattr(server, "monitor_tools") or server.monitor_tools is None:
+            server.logger.info("Monitor tools not available (requires node discovery)")
+            return
+
+        server.logger.info("Registering cluster monitoring tools")
+
+        @server.mcp.tool(description=GET_CLUSTER_OVERVIEW_DESC)
+        def get_cluster_overview(
+            format_style: Annotated[str, Field(description="'pretty' or 'json'", pattern="^(pretty|json)$")] = "pretty",
+        ) -> Any:
+            return self._wrap_sync(
+                server,
+                "get_cluster_overview",
+                server.monitor_tools.get_cluster_overview,
+            )(format_style=format_style)

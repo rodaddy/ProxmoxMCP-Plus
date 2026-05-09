@@ -448,3 +448,48 @@ mode         - 'append' (default) or 'replace'
 Returns:
 {"success": true, "keys_added": 1}
 """
+
+# Streaming exec tool descriptions (ported from rodaddy/proxmox-skill)
+EXECUTE_CONTAINER_COMMAND_STREAMING_DESC = """Execute a command inside an LXC container with streaming output.
+
+Cluster-aware: does NOT require specifying the node. Connects to the cluster
+primary node and Proxmox routes the command to the correct node automatically.
+
+Output is collected in real-time chunks with stdout/stderr separation.
+Falls back to buffered exec if streaming is not available.
+
+Parameters:
+vmid* - Container VMID (integer, e.g. 101)
+command* - Shell command to run inside the container (e.g. 'apt update', 'df -h')
+approval_token - Optional approval token if command policy requires it
+
+Returns JSON with: success, exit_code, output, error, chunks, mode"""
+
+EXECUTE_NODE_COMMAND_DESC = """Execute a command directly on a Proxmox node via SSH (not in a container).
+
+Runs the command on the Proxmox host itself, not inside any container or VM.
+
+Parameters:
+node* - Proxmox node name (e.g. 'pve1')
+command* - Shell command to run on the node (e.g. 'uptime', 'df -h')
+approval_token - Optional approval token if command policy requires it
+
+Returns JSON with: success, exit_code, output, error"""
+
+# Monitor tool descriptions (ported from rodaddy/proxmox-skill)
+GET_CLUSTER_OVERVIEW_DESC = """Get a comprehensive real-time snapshot of the entire Proxmox cluster.
+
+Shows per-node status including:
+- Online/offline status
+- CPU usage (percentage and core count)
+- Memory usage (used / total with percentage)
+- Number of containers (running / total)
+- Number of VMs (running / total)
+- Uptime
+
+Plus cluster-level aggregates.
+
+Uses parallel node discovery for fast results across all nodes.
+
+Parameters:
+format_style - 'pretty' for human-readable output, 'json' for raw data (default: 'pretty')"""
