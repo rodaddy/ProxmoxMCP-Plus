@@ -5,24 +5,38 @@ pct exec is not exposed through the Proxmox REST API; it must be invoked
 as a subprocess on the Proxmox node where the container lives. This module
 SSHes to the appropriate node and runs:
     pct exec <vmid> -- sh -c '<cmd>'
+
+Enhanced with optional cluster-aware routing: when the specific node is not
+known (or when node routing fails), falls back to the ClusterSSHClient
+which connects to the primary node and lets Proxmox route automatically.
 """
 
 import os
 import shlex
 import logging
 import subprocess
-from typing import Dict, Any
+from typing import Any, Dict, Optional
 
 import paramiko  # type: ignore[import-untyped]
 
 
 class ContainerConsoleManager:
-    """Execute shell commands inside LXC containers via SSH + pct exec."""
+    """Execute shell commands inside LXC containers via SSH + pct exec.
 
-    def __init__(self, proxmox_api: Any, ssh_config: Any) -> None:
+    Supports an optional :class:`~proxmox_mcp.core.cluster_ssh.ClusterSSHClient`
+    for cluster-aware fallback when the target node is unknown or unreachable.
+    """
+
+    def __init__(
+        self,
+        proxmox_api: Any,
+        ssh_config: Any,
+        cluster_ssh: Optional[Any] = None,
+    ) -> None:
         self.proxmox = proxmox_api
         self.ssh_cfg = ssh_config
         self.logger = logging.getLogger("proxmox-mcp.ct-console")
+        self._cluster_ssh = cluster_ssh
 
     def _ssh_host(self, node: str) -> str:
         return self.ssh_cfg.host_overrides.get(node, node)
@@ -57,8 +71,14 @@ class ContainerConsoleManager:
     def execute_command(self, node: str, vmid: str, command: str) -> Dict[str, Any]:
         """Execute *command* inside the LXC container identified by *vmid* on *node*.
 
+        If ``node`` is empty/None and a :class:`ClusterSSHClient` is available,
+        cluster-aware routing is used automatically.  If the direct node
+        connection fails and cluster SSH is available, it falls back to the
+        cluster-aware path.
+
         Args:
-            node:    Proxmox node name (e.g. 'pve1').
+            node:    Proxmox node name (e.g. 'pve1'). Can be empty/None
+                     to trigger cluster-aware routing.
             vmid:    Container ID as a string (e.g. '101').
             command: Shell command to run inside the container.
 
@@ -66,9 +86,44 @@ class ContainerConsoleManager:
             {"success": bool, "output": str, "error": str, "exit_code": int}
 
         Raises:
-            ValueError:  Container is not running.
+            ValueError:  Container is not running (when node is specified).
             RuntimeError: SSH / pct exec failure.
         """
+        # If no node specified, try cluster-aware routing
+        if not node and self._cluster_ssh is not None:
+            return self._execute_via_cluster(vmid, command)
+
+        # Standard path: direct SSH to the specified node
+        try:
+            return self._execute_direct(node, vmid, command)
+        except Exception as direct_err:
+            # If we have cluster SSH available, try that as fallback
+            if self._cluster_ssh is not None:
+                self.logger.warning(
+                    "Direct exec on %s failed (%s), falling back to cluster-aware routing",
+                    node,
+                    direct_err,
+                )
+                try:
+                    return self._execute_via_cluster(vmid, command)
+                except Exception as cluster_err:
+                    self.logger.error("Cluster-aware fallback also failed: %s", cluster_err)
+                    raise direct_err from cluster_err
+            raise
+
+    def _execute_via_cluster(self, vmid: str, command: str) -> Dict[str, Any]:
+        """Execute via the ClusterSSHClient (cluster-aware routing)."""
+        self.logger.info("Using cluster-aware routing for CT %s: %s", vmid, command)
+        result = self._cluster_ssh.container_exec(int(vmid), command)
+        return {
+            "success": result.success,
+            "output": result.stdout,
+            "error": result.stderr,
+            "exit_code": result.exit_code,
+        }
+
+    def _execute_direct(self, node: str, vmid: str, command: str) -> Dict[str, Any]:
+        """Execute via direct SSH to the specified node (original behaviour)."""
         # 1. Verify container is running via Proxmox API
         status = self.proxmox.nodes(node).lxc(vmid).status.current.get()
         if status.get("status") != "running":

@@ -26,7 +26,9 @@ from proxmox_mcp.services.builtin_tool_plugins import (
     CoreToolsPlugin,
     ImageToolsPlugin,
     JobsToolsPlugin,
+    MonitorToolsPlugin,
     SnapshotToolsPlugin,
+    StreamingExecToolsPlugin,
     VMToolsPlugin,
 )
 from proxmox_mcp.tools.backup import BackupTools
@@ -67,6 +69,55 @@ class ProxmoxMCPServer:
         )
         self.storage_tools = StorageTools(self.proxmox, metrics=self.metrics, job_store=self.job_store)
         self.cluster_tools = ClusterTools(self.proxmox, metrics=self.metrics, job_store=self.job_store)
+
+        # --- Cluster-aware SSH & Node Discovery (rodaddy/proxmox-skill port) ---
+        self.cluster_ssh = None
+        self.node_discovery = None
+        self.streaming_exec_tools = None
+        self.monitor_tools = None
+
+        if self.config.ssh is not None:
+            from proxmox_mcp.core.cluster_ssh import ClusterSSHClient
+            from proxmox_mcp.core.node_discovery import NodeDiscovery
+            from proxmox_mcp.tools.streaming_exec import StreamingExecTools
+            from proxmox_mcp.tools.monitor import MonitorTools
+
+            self.cluster_ssh = ClusterSSHClient(self.config.ssh, self.proxmox)
+            self.node_discovery = NodeDiscovery(self.proxmox)
+
+            self.streaming_exec_tools = StreamingExecTools(
+                self.proxmox,
+                self.cluster_ssh,
+                command_policy=self.command_policy,
+                metrics=self.metrics,
+                job_store=self.job_store,
+            )
+            self.monitor_tools = MonitorTools(
+                self.proxmox,
+                self.node_discovery,
+                metrics=self.metrics,
+                job_store=self.job_store,
+            )
+            self.logger.info("Cluster-aware SSH and monitoring tools enabled")
+        else:
+            self.logger.info(
+                "Cluster-aware SSH tools disabled (no [ssh] section in config)"
+            )
+
+        # Node discovery is also useful without SSH for monitor tools
+        if self.node_discovery is None:
+            from proxmox_mcp.core.node_discovery import NodeDiscovery
+            from proxmox_mcp.tools.monitor import MonitorTools
+
+            self.node_discovery = NodeDiscovery(self.proxmox)
+            self.monitor_tools = MonitorTools(
+                self.proxmox,
+                self.node_discovery,
+                metrics=self.metrics,
+                job_store=self.job_store,
+            )
+
+        # Container tools -- pass cluster_ssh for fallback routing
         self.container_tools = ContainerTools(
             self.proxmox,
             self.config.ssh,
@@ -74,6 +125,13 @@ class ProxmoxMCPServer:
             metrics=self.metrics,
             job_store=self.job_store,
         )
+        # Inject cluster SSH into the container console manager for fallback
+        if (
+            self.cluster_ssh is not None
+            and self.container_tools.console_manager is not None
+        ):
+            self.container_tools.console_manager._cluster_ssh = self.cluster_ssh
+
         self.snapshot_tools = SnapshotTools(self.proxmox, metrics=self.metrics, job_store=self.job_store)
         self.iso_tools = ISOTools(self.proxmox, metrics=self.metrics, job_store=self.job_store)
         self.backup_tools = BackupTools(self.proxmox, metrics=self.metrics, job_store=self.job_store)
@@ -99,6 +157,9 @@ class ProxmoxMCPServer:
         self.tool_registry.add(SnapshotToolsPlugin())
         self.tool_registry.add(ImageToolsPlugin())
         self.tool_registry.add(BackupToolsPlugin())
+        # Rodaddy skill-ported tools
+        self.tool_registry.add(StreamingExecToolsPlugin())
+        self.tool_registry.add(MonitorToolsPlugin())
         self.tool_registry.register_all(self)
 
     def close(self) -> None:
