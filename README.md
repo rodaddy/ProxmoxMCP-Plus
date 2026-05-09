@@ -1,969 +1,348 @@
 # ProxmoxMCP-Plus
 
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/rodaddy)
+<!-- mcp-name: io.github.RekklesNA/proxmox-mcp-plus -->
 
-An enhanced Python-based Model Context Protocol (MCP) server for interacting with Proxmox virtualization platforms. This project extends [canvrno/ProxmoxMCP](https://github.com/canvrno/ProxmoxMCP) with additional features including complete OpenAPI integration and expanded virtualization management capabilities.
+<div align="center">
+  <img src="docs/assets/logo-proxmoxmcp-plus.png" alt="ProxmoxMCP-Plus Logo" width="160"/>
+</div>
 
-## Acknowledgments
+<p align="center"><strong>Control Proxmox VE from LLMs, AI agents, MCP clients, and OpenAPI tooling with one safer interface for VMs, LXCs, backups, snapshots, ISOs, container commands, and persistent long-running jobs.</strong></p>
 
-This project is built upon the open-source project [ProxmoxMCP](https://github.com/canvrno/ProxmoxMCP) by [@canvrno](https://github.com/canvrno).
+<p align="center">
+  <a href="https://pypi.org/project/proxmox-mcp-plus/"><img alt="PyPI" src="https://img.shields.io/pypi/v/proxmox-mcp-plus"></a>
+  <a href="https://github.com/RekklesNA/ProxmoxMCP-Plus/releases"><img alt="GitHub Release" src="https://img.shields.io/github/v/release/RekklesNA/ProxmoxMCP-Plus"></a>
+  <a href="https://github.com/RekklesNA/ProxmoxMCP-Plus/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/RekklesNA/ProxmoxMCP-Plus/ci.yml?branch=main"></a>
+  <a href="https://github.com/RekklesNA/ProxmoxMCP-Plus/pkgs/container/ProxmoxMCP-Plus"><img alt="GHCR" src="https://img.shields.io/badge/GHCR-container-blue"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/RekklesNA/ProxmoxMCP-Plus"></a>
+</p>
 
-## New Features and Improvements
+<p align="center">
+  <a href="#quick-start">Quick Start</a> |
+  <a href="#demo">Demo</a> |
+  <a href="#core-platform-capabilities">Capabilities</a> |
+  <a href="#scenario-templates">Scenarios</a> |
+  <a href="#documentation">Docs</a> |
+  <a href="https://github.com/RekklesNA/ProxmoxMCP-Plus/wiki">Wiki</a>
+</p>
 
-### Major Enhancements
+![ProxmoxMCP-Plus architecture and control flow](docs/assets/proxmoxmcp-drawio-hero-main-refresh.svg)
 
-| Feature Category | Description | Tools |
-|-----------------|-------------|-------|
-| **VM Lifecycle Management** | Complete virtual machine creation, management, and deletion | `create_vm`, `delete_vm` |
-| **Power Management** | Control VM power states | `start_vm`, `stop_vm`, `shutdown_vm`, `reset_vm` |
-| **Container Support** | Full LXC container lifecycle management | `get_containers`, `create_container`, `delete_container`, `start_container`, `stop_container`, `restart_container`, `update_container_resources` |
-| **Snapshot Management** | Create and manage VM/container snapshots | `list_snapshots`, `create_snapshot`, `delete_snapshot`, `rollback_snapshot` |
-| **Backup and Restore** | Backup and restore VMs and containers | `list_backups`, `create_backup`, `restore_backup`, `delete_backup` |
-| **ISO and Template Management** | Manage installation media and templates | `list_isos`, `list_templates`, `download_iso`, `delete_iso` |
-| **Monitoring** | Cluster and resource monitoring | `get_nodes`, `get_node_status`, `get_vms`, `get_storage`, `get_cluster_status` |
-| **OpenAPI Integration** | REST API endpoints for external integration | 20+ API endpoints |
-| **Security and Stability** | Production-grade error handling and validation | Token-based authentication, comprehensive logging |
+## Platform Overview
 
-## Built With
+ProxmoxMCP-Plus provides a unified Proxmox VE control surface in two forms:
 
-- [Proxmoxer](https://github.com/proxmoxer/proxmoxer) - Python wrapper for Proxmox API
-- [MCP SDK](https://github.com/modelcontextprotocol/sdk) - Model Context Protocol SDK
-- [Pydantic](https://docs.pydantic.dev/) - Data validation using Python type annotations
+- `MCP` for Claude Desktop, Open WebUI, and other LLM or AI agent clients
+- `OpenAPI` for HTTP automation, dashboards, internal tools, and no-code workflows
 
-## Features
+Instead of stitching together raw Proxmox API calls, shell scripts, and custom glue code, the project consolidates core operational workflows in one interface:
 
-- Full integration with Cline and Open WebUI
-- Built with the official MCP SDK
-- Secure token-based authentication with Proxmox
-- Complete VM lifecycle management (create, start, stop, reset, shutdown, delete)
-- VM console command execution
-- LXC container management support
-- Intelligent storage type detection (LVM/file-based)
-- Configurable logging system
-- Type-safe implementation with Pydantic
-- Rich output formatting with customizable themes
-- OpenAPI REST endpoints for integration
-- 20+ fully functional API endpoints
-- Complete snapshot management (create, delete, rollback)
-- Backup and restore capabilities
-- ISO and template management
+- VM and LXC lifecycle actions
+- snapshot create, rollback, and delete
+- backup and restore workflows
+- ISO download and cleanup
+- node, storage, and cluster inspection
+- SSH-backed container command execution with guardrails
+- persistent job tracking for async Proxmox tasks
 
+## Design Priorities
 
-## Installation
+ProxmoxMCP-Plus is designed for the gap between low-level Proxmox primitives and production-facing workflows that need to be usable from both LLM-native clients and standard automation systems.
 
-### Prerequisites
-- UV package manager (recommended)
-- Python 3.9 or higher
-- Git
-- Access to a Proxmox server with API token credentials
+- `Dual-surface architecture`: MCP for conversational workflows, OpenAPI for standard automation
+- `Operator-oriented scope`: focused on day-2 tasks, not just raw low-level endpoints
+- `Safer-by-default execution`: auth, command policy, and explicit execution paths
+- `Observable long-running workflows`: stable `Job ID`s, progress polling, retry, cancel, and audit history
+- `Operationally grounded`: documented workflows are backed by live-environment verification
 
-Before starting, ensure you have:
-- [ ] Proxmox server hostname or IP
-- [ ] Proxmox API token (see [API Token Setup](#proxmox-api-token-setup))
-- [ ] UV installed (`pip install uv`)
+## Quick Start
 
-### Option 1: Quick Install (Recommended)
+### 1. Prepare Proxmox access
 
-1. Clone and set up environment:
-   ```bash
-   # Clone repository
-   git clone https://github.com/RekklesNA/ProxmoxMCP-Plus.git
-   cd ProxmoxMCP-Plus
+Read the official Proxmox docs first if you are setting up a fresh lab:
 
-   # Create and activate virtual environment
-   uv venv
-   source .venv/bin/activate  # Linux/macOS
-   # OR
-   .\.venv\Scripts\Activate.ps1  # Windows
-   ```
+- [Proxmox VE installation guide](https://pve.proxmox.com/pve-docs/pve-installation-plain.html)
+- [Proxmox VE API guide](https://pve.proxmox.com/wiki/Proxmox_VE_API)
+- [Proxmox VE administration guide](https://pve.proxmox.com/pve-docs/pve-admin-guide.html)
+- [Linux Container guide](https://pve.proxmox.com/wiki/Linux_Container)
 
-2. Install dependencies:
-   ```bash
-   # Install with development dependencies
-   uv pip install -e ".[dev]"
-   ```
+Create it from the example first:
 
-3. Create configuration:
-   ```bash
-   # Create config directory and copy template
-   mkdir -p proxmox-config
-   cp proxmox-config/config.example.json proxmox-config/config.json
-   ```
-
-4. Edit `proxmox-config/config.json`:
-   ```json
-   {
-       "proxmox": {
-           "host": "PROXMOX_HOST",        # Required: Your Proxmox server address
-           "port": 8006,                  # Optional: Default is 8006
-           "verify_ssl": false,           # Optional: Set false for self-signed certs
-           "service": "PVE"               # Optional: Default is PVE
-       },
-       "auth": {
-           "user": "USER@pve",            # Required: Your Proxmox username
-           "token_name": "TOKEN_NAME",    # Required: API token ID
-           "token_value": "TOKEN_VALUE"   # Required: API token value
-       },
-       "logging": {
-           "level": "INFO",               # Optional: DEBUG for more detail
-           "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-           "file": "proxmox_mcp.log"      # Optional: Log to file
-       },
-       "mcp": {
-           "host": "127.0.0.1",           # Optional: Host for SSE/STREAMABLE transports
-           "port": 8000,                  # Optional: Port for SSE/STREAMABLE transports
-           "transport": "STDIO"           # Optional: STDIO, SSE, or STREAMABLE
-       }
-   }
-   ```
-
-### Verifying Installation
-
-1. Check Python environment:
-   ```bash
-   python -c "import proxmox_mcp; print('Installation OK')"
-   ```
-
-2. Run the tests:
-   ```bash
-   pytest
-   ```
-
-3. Verify configuration:
-   ```bash
-   # Linux/macOS
-   PROXMOX_MCP_CONFIG="proxmox-config/config.json" python -m proxmox_mcp.server
-
-   # Windows (PowerShell)
-   $env:PROXMOX_MCP_CONFIG="proxmox-config\config.json"; python -m proxmox_mcp.server
-   ```
-
-## Configuration
-
-### Proxmox API Token Setup
-1. Log into your Proxmox web interface
-2. Navigate to Datacenter -> Permissions -> API Tokens
-3. Create a new API token:
-   - Select a user (e.g., root@pam)
-   - Enter a token ID (e.g., "mcp-token")
-   - Uncheck "Privilege Separation" if you want full access
-   - Save and copy both the token ID and secret
-
-## Running the Server
-
-### Development Mode
-For testing and development:
 ```bash
-# Activate virtual environment first
-source .venv/bin/activate  # Linux/macOS
-# OR
-.\.venv\Scripts\Activate.ps1  # Windows
-
-# Run the server
-python -m proxmox_mcp.server
+cp proxmox-config/config.example.json proxmox-config/config.json
 ```
 
-### MCP Transport Configuration
+Then edit `proxmox-config/config.json` with your environment. At minimum, it needs:
 
-The MCP server supports multiple transport modes. Configure these in the `mcp` section of
-your `proxmox-config/config.json`:
+- `proxmox.host`
+- `proxmox.port`
+- `auth.user`
+- `auth.token_name`
+- `auth.token_value`
 
-- `STDIO`: Default. Run over stdio for MCP clients like Claude Desktop/Cline.
-- `SSE`: Serve MCP over Server-Sent Events (SSE).
-- `STREAMABLE`: Serve MCP over streamable HTTP.
+Add an `ssh` section as well if you want container command execution.
+Add a `jobs` section if you want job state persisted somewhere other than the default local SQLite file.
 
-### OpenAPI Deployment (Production Ready)
+For real live verification, use a separate `proxmox-config/config.live.json` created from `proxmox-config/config.live.example.json`.
+Do not point live e2e at a placeholder or local-only `config.json` unless you intentionally run a local API tunnel there.
 
-Deploy ProxmoxMCP Plus as standard OpenAPI REST endpoints for integration with Open WebUI and other applications.
-
-#### Quick OpenAPI Start
-```bash
-# Install mcpo (MCP-to-OpenAPI proxy)
-pip install mcpo
-
-# Start OpenAPI service on port 8811
-./start_openapi.sh
-```
-
-#### Docker Deployment
-```bash
-# Build and run with Docker
-docker build -t proxmox-mcp-api .
-docker run -d --name proxmox-mcp-api -p 8811:8811 \
-  -v $(pwd)/proxmox-config:/app/proxmox-config proxmox-mcp-api
-
-# Or use Docker Compose
-docker-compose up -d
-```
-
-#### Access OpenAPI Service
-Once deployed, access your service at:
-- **API Documentation**: http://your-server:8811/docs
-- **OpenAPI Specification**: http://your-server:8811/openapi.json
-- **Health Check**: http://your-server:8811/health
-
-### Claude Desktop Integration
-
-For Claude Desktop users, add this configuration to your MCP settings file:
-
-**Configuration file location:**
-- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-- Linux: `~/.config/Claude/claude_desktop_config.json`
-
-**Quick Setup:**
-1. Copy the example configuration:
-   ```bash
-   # macOS
-   cp proxmox-config/claude_desktop_config.example.json ~/Library/Application\ Support/Claude/claude_desktop_config.json
-
-   # Linux
-   cp proxmox-config/claude_desktop_config.example.json ~/.config/Claude/claude_desktop_config.json
-
-   # Windows (PowerShell)
-   Copy-Item proxmox-config\claude_desktop_config.example.json $env:APPDATA\Claude\claude_desktop_config.json
-   ```
-
-2. Edit the file and replace the following values:
-   - `/absolute/path/to/ProxmoxMCP-Plus` - Full path to your installation
-   - `your-proxmox-host` - Your Proxmox server IP or hostname
-   - `username@pve` - Your Proxmox username
-   - `token-name` - Your API token name
-   - `token-value` - Your API token value
-
-**Configuration:**
-```json
-{
-    "mcpServers": {
-        "ProxmoxMCP-Plus": {
-            "command": "/absolute/path/to/ProxmoxMCP-Plus/.venv/bin/python",
-            "args": ["-m", "proxmox_mcp.server"],
-            "env": {
-                "PYTHONPATH": "/absolute/path/to/ProxmoxMCP-Plus/src",
-                "PROXMOX_MCP_CONFIG": "/absolute/path/to/ProxmoxMCP-Plus/proxmox-config/config.json",
-                "PROXMOX_HOST": "your-proxmox-host",
-                "PROXMOX_USER": "username@pve",
-                "PROXMOX_TOKEN_NAME": "token-name",
-                "PROXMOX_TOKEN_VALUE": "token-value",
-                "PROXMOX_PORT": "8006",
-                "PROXMOX_VERIFY_SSL": "false",
-                "PROXMOX_SERVICE": "PVE",
-                "LOG_LEVEL": "DEBUG"
-            }
-        }
-    }
-}
-```
-
-**After configuration:**
-1. Restart Claude Desktop
-2. The ProxmoxMCP-Plus tools will be available in your conversations
-3. You can now manage your Proxmox infrastructure through Claude Desktop!
-
-### Cline Desktop Integration
-
-For Cline users, add this configuration to your MCP settings file (typically at `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`):
+Minimal job persistence config:
 
 ```json
 {
-    "mcpServers": {
-        "ProxmoxMCP-Plus": {
-            "command": "/absolute/path/to/ProxmoxMCP-Plus/.venv/bin/python",
-            "args": ["-m", "proxmox_mcp.server"],
-            "cwd": "/absolute/path/to/ProxmoxMCP-Plus",
-            "env": {
-                "PYTHONPATH": "/absolute/path/to/ProxmoxMCP-Plus/src",
-                "PROXMOX_MCP_CONFIG": "/absolute/path/to/ProxmoxMCP-Plus/proxmox-config/config.json",
-                "PROXMOX_HOST": "your-proxmox-host",
-                "PROXMOX_USER": "username@pve",
-                "PROXMOX_TOKEN_NAME": "token-name",
-                "PROXMOX_TOKEN_VALUE": "token-value",
-                "PROXMOX_PORT": "8006",
-                "PROXMOX_VERIFY_SSL": "false",
-                "PROXMOX_SERVICE": "PVE",
-                "LOG_LEVEL": "DEBUG"
-            },
-            "disabled": false,
-            "autoApprove": []
-        }
-    }
+  "jobs": {
+    "sqlite_path": "proxmox-jobs.sqlite3"
+  }
 }
 ```
 
-## Available Tools & API Endpoints
+### 2. Choose one runtime path
 
-The server provides comprehensive MCP tools and corresponding REST API endpoints:
+#### PyPI
 
-### VM Management Tools
-
-#### create_vm 
-Create a new virtual machine with specified resources.
-
-**Parameters:**
-- `node` (string, required): Name of the node
-- `vmid` (string, required): ID for the new VM
-- `name` (string, required): Name for the VM
-- `cpus` (integer, required): Number of CPU cores (1-32)
-- `memory` (integer, required): Memory in MB (512-131072)
-- `disk_size` (integer, required): Disk size in GB (5-1000)
-- `storage` (string, optional): Storage pool name
-- `ostype` (string, optional): OS type (default: l26)
-
-**API Endpoint:**
-```http
-POST /create_vm
-Content-Type: application/json
-
-{
-    "node": "pve",
-    "vmid": "200",
-    "name": "my-vm",
-    "cpus": 1,
-    "memory": 2048,
-    "disk_size": 10
-}
+```bash
+uvx proxmox-mcp-plus
 ```
 
-**Example Response:**
-```
-VM 200 created successfully.
+Or install it first:
 
-VM Configuration:
-  - Name: my-vm
-  - Node: pve
-  - VM ID: 200
-  - CPU Cores: 1
-  - Memory: 2048 MB (2.0 GB)
-  - Disk: 10 GB (local-lvm, raw format)
-  - Storage Type: lvmthin
-  - Network: virtio (bridge=vmbr0)
-  - QEMU Agent: Enabled
-
-Task ID: UPID:pve:001AB729:0442E853:682FF380:qmcreate:200:root@pam!mcp
+```bash
+pip install proxmox-mcp-plus
+proxmox-mcp-plus
 ```
 
-#### VM Power Management
+#### Docker / GHCR
 
-**start_vm**: Start a virtual machine
-```http
-POST /start_vm
-{"node": "pve", "vmid": "200"}
+OpenAPI mode remains the default Docker runtime:
+
+```bash
+docker run --rm -p 8811:8811 \
+  -v "$(pwd)/proxmox-config/config.json:/app/proxmox-config/config.json:ro" \
+  ghcr.io/rekklesna/proxmoxmcp-plus:latest
 ```
 
-**stop_vm**: Force stop a virtual machine
-```http
-POST /stop_vm
-{"node": "pve", "vmid": "200"}
+Native MCP Streamable HTTP mode is available from the same image:
+
+```bash
+docker run --rm -p 8000:8000 \
+  -e PROXMOX_MCP_MODE=mcp-http \
+  -e MCP_HOST=0.0.0.0 \
+  -e MCP_PORT=8000 \
+  -e MCP_TRANSPORT=STREAMABLE_HTTP \
+  -v "$(pwd)/proxmox-config/config.json:/app/proxmox-config/config.json:ro" \
+  ghcr.io/rekklesna/proxmoxmcp-plus:latest
 ```
 
-**shutdown_vm**: Gracefully shutdown a virtual machine
-```http
-POST /shutdown_vm
-{"node": "pve", "vmid": "200"}
+Point MCP clients that support Streamable HTTP at `http://<docker-host>:8000/mcp`.
+
+#### Source
+
+```bash
+git clone https://github.com/RekklesNA/ProxmoxMCP-Plus.git
+cd ProxmoxMCP-Plus
+uv venv
+uv pip install -e ".[dev]"
+python main.py
 ```
 
-**reset_vm**: Reset (restart) a virtual machine
-```http
-POST /reset_vm
-{"node": "pve", "vmid": "200"}
+### 3. Run the HTTP/OpenAPI surface
+
+```bash
+docker compose up -d
+curl -f http://localhost:8811/health
+curl http://localhost:8811/openapi.json
 ```
 
-**delete_vm**: Completely delete a virtual machine
-```http
-POST /delete_vm
-{"node": "pve", "vmid": "200", "force": false}
+### 4. Run the native MCP Streamable HTTP surface
+
+```bash
+docker compose --profile mcp-http up -d proxmox-mcp-http
 ```
 
-### Snapshot Management Tools
+Connect a Streamable HTTP MCP client to:
 
-#### list_snapshots
-List all snapshots for a VM or container.
-
-**Parameters:**
-- `node` (string, required): Host node name (e.g. 'pve')
-- `vmid` (string, required): VM or container ID (e.g. '100')
-- `vm_type` (string, optional): Type - 'qemu' for VMs, 'lxc' for containers (default: 'qemu')
-
-**API Endpoint:** `POST /list_snapshots`
-
-**Example:**
-```http
-POST /list_snapshots
-{"node": "pve", "vmid": "100", "vm_type": "qemu"}
+```text
+http://localhost:8000/mcp
 ```
 
-#### create_snapshot
-Create a snapshot of a VM or container.
+The `8811` service is the OpenAPI/REST bridge. The `8000` service is the native MCP HTTP endpoint.
 
-**Parameters:**
-- `node` (string, required): Host node name
-- `vmid` (string, required): VM or container ID
-- `snapname` (string, required): Snapshot name (no spaces, e.g. 'before-update')
-- `description` (string, optional): Description for the snapshot
-- `vmstate` (boolean, optional): Include memory state (VMs only, default: false)
-- `vm_type` (string, optional): Type - 'qemu' or 'lxc' (default: 'qemu')
+### 5. Point a stdio MCP client at the server
 
-**API Endpoint:**
-```http
-POST /create_snapshot
-Content-Type: application/json
-
-{
-    "node": "pve",
-    "vmid": "100",
-    "snapname": "pre-upgrade",
-    "description": "Before system upgrade",
-    "vmstate": true
-}
-```
-
-#### delete_snapshot
-Delete a snapshot.
-
-**Parameters:**
-- `node` (string, required): Host node name
-- `vmid` (string, required): VM or container ID
-- `snapname` (string, required): Snapshot name to delete
-- `vm_type` (string, optional): Type - 'qemu' or 'lxc' (default: 'qemu')
-
-**API Endpoint:**
-```http
-POST /delete_snapshot
-{"node": "pve", "vmid": "100", "snapname": "old-snapshot"}
-```
-
-#### rollback_snapshot
-Rollback VM/container to a previous snapshot.
-
-**WARNING:** This will stop the VM/container and restore to the snapshot state!
-
-**Parameters:**
-- `node` (string, required): Host node name
-- `vmid` (string, required): VM or container ID
-- `snapname` (string, required): Snapshot name to restore
-- `vm_type` (string, optional): Type - 'qemu' or 'lxc' (default: 'qemu')
-
-**API Endpoint:**
-```http
-POST /rollback_snapshot
-{"node": "pve", "vmid": "100", "snapname": "before-update"}
-```
-
-### Container Management Tools
-
-#### get_containers
-List all LXC containers across the cluster.
-
-**API Endpoint:** `POST /get_containers`
-
-**Example Response:**
-```
-Containers
-
-nginx-server (ID: 200)
-  - Status: RUNNING
-  - Node: pve
-  - CPU Cores: 2
-  - Memory: 1.5 GB / 2.0 GB (75.0%)
-```
-
-#### create_container
-Create a new LXC container with specified configuration.
-
-**Parameters:**
-- `node` (string, required): Host node name (e.g. 'pve')
-- `vmid` (string, required): Container ID number (e.g. '200')
-- `ostemplate` (string, required): OS template path (e.g. 'local:vztmpl/alpine-3.19-default_20240207_amd64.tar.xz')
-- `hostname` (string, optional): Container hostname (defaults to 'ct-{vmid}')
-- `cores` (integer, optional): Number of CPU cores (default: 1)
-- `memory` (integer, optional): Memory size in MiB (default: 512)
-- `swap` (integer, optional): Swap size in MiB (default: 512)
-- `disk_size` (integer, optional): Root disk size in GB (default: 8)
-- `storage` (string, optional): Storage pool for rootfs (auto-detects if not specified)
-- `password` (string, optional): Root password
-- `ssh_public_keys` (string, optional): SSH public keys for root user
-- `network_bridge` (string, optional): Network bridge name (default: 'vmbr0')
-- `start_after_create` (boolean, optional): Start container after creation (default: false)
-- `unprivileged` (boolean, optional): Create unprivileged container (default: true)
-
-**API Endpoint:**
-```http
-POST /create_container
-Content-Type: application/json
-
-{
-    "node": "pve",
-    "vmid": "200",
-    "ostemplate": "local:vztmpl/alpine-3.19-default_20240207_amd64.tar.xz",
-    "hostname": "my-container",
-    "cores": 2,
-    "memory": 1024,
-    "disk_size": 10
-}
-```
-
-#### delete_container
-Delete/remove an LXC container completely.
-
-**WARNING:** This operation permanently deletes the container and all its data!
-
-**Parameters:**
-- `selector` (string, required): Container selector - '123' | 'pve1:123' | 'pve1/name' | 'name'
-- `force` (boolean, optional): Force deletion even if container is running (default: false)
-
-**API Endpoint:**
-```http
-POST /delete_container
-Content-Type: application/json
-
-{
-    "selector": "200",
-    "force": false
-}
-```
-
-### Backup and Restore Tools
-
-#### list_backups
-List available backups across the cluster.
-
-**Parameters:**
-- `node` (string, optional): Filter by node
-- `storage` (string, optional): Filter by storage pool
-- `vmid` (string, optional): Filter by VM/container ID
-
-**API Endpoint:** `POST /list_backups`
-
-**Example:**
-```http
-POST /list_backups
-{"node": "pve", "storage": "backup-storage"}
-```
-
-#### create_backup
-Create a backup of a VM or container.
-
-**Parameters:**
-- `node` (string, required): Node where VM/container runs
-- `vmid` (string, required): VM or container ID to backup
-- `storage` (string, required): Target backup storage
-- `compress` (string, optional): Compression - '0', 'gzip', 'lz4', 'zstd' (default: 'zstd')
-- `mode` (string, optional): Backup mode - 'snapshot', 'suspend', 'stop' (default: 'snapshot')
-- `notes` (string, optional): Notes/description for the backup
-
-**API Endpoint:**
-```http
-POST /create_backup
-Content-Type: application/json
-
-{
-    "node": "pve",
-    "vmid": "100",
-    "storage": "backup-storage",
-    "compress": "zstd",
-    "mode": "snapshot",
-    "notes": "Weekly backup"
-}
-```
-
-#### restore_backup
-Restore a VM or container from a backup.
-
-**Parameters:**
-- `node` (string, required): Target node for restore
-- `archive` (string, required): Backup volume ID (from list_backups output)
-- `vmid` (string, required): New VM/container ID for the restored machine
-- `storage` (string, optional): Target storage for disks (uses original if not specified)
-- `unique` (boolean, optional): Generate unique MAC addresses (default: true)
-
-**API Endpoint:**
-```http
-POST /restore_backup
-Content-Type: application/json
-
-{
-    "node": "pve",
-    "archive": "backup:backup/vzdump-qemu-100-2024_01_15.vma.zst",
-    "vmid": "200",
-    "unique": true
-}
-```
-
-#### delete_backup
-Delete a backup file from storage.
-
-**WARNING:** This permanently deletes the backup!
-
-**Parameters:**
-- `node` (string, required): Node name
-- `storage` (string, required): Storage pool name
-- `volid` (string, required): Backup volume ID to delete
-
-**API Endpoint:**
-```http
-POST /delete_backup
-{
-    "node": "pve",
-    "storage": "backup-storage",
-    "volid": "backup:backup/vzdump-qemu-100-2024_01_15.vma.zst"
-}
-```
-
-### ISO and Template Management Tools
-
-#### list_isos
-List available ISO images across the cluster.
-
-**Parameters:**
-- `node` (string, optional): Filter by node
-- `storage` (string, optional): Filter by storage pool
-
-**API Endpoint:** `POST /list_isos`
-
-**Returns:** List of ISOs with filename, size, and storage location.
-
-#### list_templates
-List available OS templates for container creation.
-
-**Parameters:**
-- `node` (string, optional): Filter by node
-- `storage` (string, optional): Filter by storage pool
-
-**API Endpoint:** `POST /list_templates`
-
-**Returns:** List of templates (vztmpl) with name, size, and storage. Use the returned Volume ID with create_container's ostemplate parameter.
-
-#### download_iso
-Download an ISO image from a URL to Proxmox storage.
-
-**Parameters:**
-- `node` (string, required): Target node name
-- `storage` (string, required): Target storage pool (must support ISO content)
-- `url` (string, required): URL to download from
-- `filename` (string, required): Target filename (e.g. 'ubuntu-22.04-live-server-amd64.iso')
-- `checksum` (string, optional): Checksum for verification
-- `checksum_algorithm` (string, optional): Algorithm - 'sha256', 'sha512', 'md5' (default: 'sha256')
-
-**API Endpoint:**
-```http
-POST /download_iso
-Content-Type: application/json
-
-{
-    "node": "pve",
-    "storage": "local",
-    "url": "https://releases.ubuntu.com/22.04/ubuntu-22.04-live-server-amd64.iso",
-    "filename": "ubuntu-22.04-live-server-amd64.iso",
-    "checksum": "a1b2c3..."
-}
-```
-
-#### delete_iso
-Delete an ISO or template from storage.
-
-**Parameters:**
-- `node` (string, required): Node name
-- `storage` (string, required): Storage pool name
-- `filename` (string, required): ISO/template filename to delete
-
-**API Endpoint:**
-```http
-POST /delete_iso
-{
-    "node": "pve",
-    "storage": "local",
-    "filename": "old-distro.iso"
-}
-```
-
-### Monitoring Tools
-
-#### get_nodes
-Lists all nodes in the Proxmox cluster.
-
-**API Endpoint:** `POST /get_nodes`
-
-**Example Response:**
-```
-Proxmox Nodes
-
-pve-compute-01
-  - Status: ONLINE
-  - Uptime: 156d 12h
-  - CPU Cores: 64
-  - Memory: 186.5 GB / 512.0 GB (36.4%)
-```
-
-#### get_node_status
-Get detailed status of a specific node.
-
-**Parameters:**
-- `node` (string, required): Name of the node
-
-**API Endpoint:** `POST /get_node_status`
-
-#### get_vms
-List all VMs across the cluster.
-
-**API Endpoint:** `POST /get_vms`
-
-#### get_storage
-List available storage pools.
-
-**API Endpoint:** `POST /get_storage`
-
-#### get_cluster_status
-Get overall cluster status and health.
-
-**API Endpoint:** `POST /get_cluster_status`
-
-#### execute_vm_command
-Execute a command in a VM's console using QEMU Guest Agent.
-
-**Parameters:**
-- `node` (string, required): Name of the node where VM is running
-- `vmid` (string, required): ID of the VM
-- `command` (string, required): Command to execute
-
-**API Endpoint:** `POST /execute_vm_command`
-
-**Requirements:**
-- VM must be running
-- QEMU Guest Agent must be installed and running in the VM
-
-## Open WebUI Integration
-
-### Configure Open WebUI
-
-1. Access your Open WebUI instance
-2. Navigate to **Settings** → **Connections** → **OpenAPI**
-3. Add new API configuration:
+Minimal MCP client shape:
 
 ```json
 {
-  "name": "Proxmox MCP API Plus",
-  "base_url": "http://your-server:8811",
-  "api_key": "",
-  "description": "Enhanced Proxmox Virtualization Management API"
-}
-```
-
-### Natural Language VM Creation
-
-The system supports natural language VM creation requests through AI assistants. Example requests:
-
-- "Can you create a VM with 1 cpu core and 2 GB ram with 10GB of storage disk"
-- "Create a new VM for testing with minimal resources"
-- "I need a development server with 4 cores and 8GB RAM"
-
-The AI assistant will automatically call the appropriate APIs and provide detailed feedback.
-
-## Storage Type Support
-
-### Intelligent Storage Detection
-
-ProxmoxMCP Plus automatically detects storage types and selects appropriate disk formats:
-
-#### LVM Storage (local-lvm, vm-storage)
-- Format: `raw`
-- High performance
-- Note: No cloud-init image support
-
-#### File-based Storage (local, NFS, CIFS)
-- Format: `qcow2`
-- Cloud-init support
-- Flexible snapshot capabilities
-
-## Project Structure
-
-```
-ProxmoxMCP-Plus/
-├── src/                          # Source code
-│   └── proxmox_mcp/
-│       ├── server.py             # Main MCP server implementation
-│       ├── config/               # Configuration handling
-│       ├── core/                 # Core functionality
-│       ├── formatting/           # Output formatting and themes
-│       ├── tools/                # Tool implementations
-│       │   ├── vm.py             # VM management
-│       │   ├── container.py      # Container management
-│       │   └── console/          # VM console operations
-│       └── utils/                # Utilities (auth, logging)
-│
-├── tests/                        # Unit test suite
-├── test_scripts/                 # Integration tests & demos
-│   ├── README.md                 # Test documentation
-│   ├── test_vm_power.py          # VM power management tests
-│   ├── test_vm_start.py          # VM startup tests
-│   ├── test_create_vm.py         # VM creation tests
-│   └── test_openapi.py           # OpenAPI service tests
-│
-├── proxmox-config/               # Configuration files
-│   └── config.json               # Server configuration
-│
-├── Configuration Files
-│   ├── pyproject.toml            # Project metadata
-│   ├── docker-compose.yml        # Docker orchestration
-│   ├── Dockerfile                # Docker image definition
-│   └── requirements.in           # Dependencies
-│
-├── Scripts
-│   ├── start_server.sh           # MCP server launcher
-│   └── start_openapi.sh          # OpenAPI service launcher
-│
-└── Documentation
-    ├── README.md                 # This file
-    ├── VM_CREATION_GUIDE.md      # VM creation guide
-    ├── OPENAPI_DEPLOYMENT.md     # OpenAPI deployment
-    └── LICENSE                   # MIT License
-```
-
-## Testing
-
-### Run Unit Tests
-```bash
-pytest
-```
-
-### Run Integration Tests
-```bash
-cd test_scripts
-
-# Test VM power management
-python test_vm_power.py
-
-# Test VM creation
-python test_create_vm.py
-
-# Test OpenAPI service
-python test_openapi.py
-```
-
-### API Testing with curl
-```bash
-# Test node listing
-curl -X POST "http://your-server:8811/get_nodes" \
-  -H "Content-Type: application/json" \
-  -d "{}"
-
-# Test VM creation
-curl -X POST "http://your-server:8811/create_vm" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "node": "pve",
-    "vmid": "300",
-    "name": "test-vm",
-    "cpus": 1,
-    "memory": 2048,
-    "disk_size": 10
-  }'
-```
-
-## Production Security
-
-### API Key Authentication
-Set up secure API access:
-
-```bash
-export PROXMOX_API_KEY="your-secure-api-key"
-export PROXMOX_MCP_CONFIG="/app/proxmox-config/config.json"
-```
-
-### Nginx Reverse Proxy
-Example nginx configuration:
-
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-    
-    location / {
-        proxy_pass http://localhost:8811;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
+  "mcpServers": {
+    "proxmox-mcp-plus": {
+      "command": "python",
+      "args": ["/path/to/ProxmoxMCP-Plus/main.py"],
+      "env": {
+        "PROXMOX_MCP_CONFIG": "/path/to/ProxmoxMCP-Plus/proxmox-config/config.json"
+      }
     }
+  }
 }
 ```
 
-## Troubleshooting
+Client-specific examples for Claude Desktop and Open WebUI are in the [Integrations Guide](docs/wiki/Integrations%20Guide.md).
 
-### Common Issues
+## Demo
 
-1. **Port already in use**
-   ```bash
-   netstat -tlnp | grep 8811
-   # Change port if needed
-   mcpo --port 8812 -- ./start_server.sh
-   ```
+This demo is a direct terminal recording of `qwen/qwen3.6-plus` driving a live MCP session in English against a local Proxmox lab. It shows natural-language control flowing through MCP tools to create and start an LXC, execute a container command, and confirm the HTTP `/health` surface.
 
-2. **Configuration errors**
-   ```bash
-   # Verify config file
-   cat proxmox-config/config.json
-   ```
+![Recorded demo gif](docs/assets/proxmoxmcp-demo.gif)
 
-3. **Connection issues**
-   ```bash
-   # Test Proxmox connectivity
-   curl -k https://your-proxmox:8006/api2/json/version
-   ```
+[Watch the MP4 version](docs/assets/proxmoxmcp-demo.mp4)
 
-### View Logs
+## Core Platform Capabilities
+
+ProxmoxMCP-Plus provides a unified control surface for the operational tasks most teams actually need in Proxmox VE. The same server can expose these workflows to MCP clients for LLM and AI-agent use cases, and to HTTP consumers through the OpenAPI bridge.
+
+Supported workflow areas:
+
+| Capability Area | Availability |
+| --- | --- |
+| VM create / start / stop / delete | Available |
+| VM snapshot create / rollback / delete | Available |
+| Backup create / restore | Available |
+| ISO download / delete | Available |
+| LXC create / start / stop / delete | Available |
+| Container SSH-backed command execution | Available |
+| Container authorized_keys update | Available |
+| Persistent job store for long tasks | Available |
+| MCP job control tools (`list_jobs`, `get_job`, `poll_job`, `cancel_job`, `retry_job`) | Available |
+| OpenAPI `/jobs` endpoints with explicit status codes | Available |
+| Local OpenAPI `/health` and schema | Available |
+| Docker native MCP Streamable HTTP at `/mcp` | Available |
+| Docker image build and `/health` | Available |
+
+Validation and contract entry points in this repository:
+
+- `pytest -q --cov=proxmox_mcp --cov-report=term-missing --cov-fail-under=60`
+- `ruff check .`
+- `mypy src --ignore-missing-imports`
+- `pip-audit -r requirements.txt --ignore-vuln CVE-2026-44405`
+- `tests/integration/test_real_contract.py`
+- `tests/scripts/run_real_e2e.py`
+
+`tests/scripts/run_real_e2e.py` now prefers `proxmox-config/config.live.json` or `PROXMOX_MCP_E2E_CONFIG`.
+This avoids accidentally running live checks against a machine-specific default `config.json`.
+
+## Long-Running Jobs
+
+Many Proxmox mutations are asynchronous. ProxmoxMCP-Plus now wraps those tasks in a persistent job layer so MCP and OpenAPI clients can track them through a stable `Job ID`.
+
+Long-running tools such as VM create/start/stop, container create/start/stop, snapshot changes, backup/restore, and ISO download/delete now return both:
+
+- `task_id`: the raw Proxmox `UPID`
+- `job_id`: the stable server-side job record
+
+The job record stores:
+
+- current status and progress
+- retry count and prior `UPID`s
+- latest result payload or failure reason
+- audit history for create, poll, retry, and cancel actions
+
+By default the job store persists to `proxmox-jobs.sqlite3`, so restart does not lose in-flight or completed job metadata.
+
+### MCP Job Tools
+
+- `list_jobs`
+- `get_job`
+- `poll_job`
+- `cancel_job`
+- `retry_job`
+
+### OpenAPI Job Routes
+
+When the OpenAPI proxy is enabled and a local `JobStore` is available, these routes are exposed directly:
+
+| Path | Method | Purpose | Success Codes |
+| --- | --- | --- | --- |
+| `/jobs` | `GET` | list persisted jobs | `200` |
+| `/jobs/{job_id}` | `GET` | fetch one job, optional `refresh=true` | `200` |
+| `/jobs/{job_id}/poll` | `POST` | refresh status from Proxmox | `200` |
+| `/jobs/{job_id}/cancel` | `POST` | request cancellation | `202` |
+| `/jobs/{job_id}/retry` | `POST` | replay a stored retry recipe | `202` |
+
+Common error codes:
+
+- `404`: unknown `job_id`
+- `409`: the job exists but that operation is not valid now
+- `503`: the OpenAPI proxy was started without a local `JobStore`
+
+`tests/scripts/run_real_e2e.py` now prefers `proxmox-config/config.live.json` or `PROXMOX_MCP_E2E_CONFIG`.
+This avoids accidentally running live checks against a machine-specific default `config.json`.
+
+## Positioning Against Common Approaches
+
+| Capability | Official Proxmox API | One-off scripts | ProxmoxMCP-Plus |
+| --- | --- | --- | --- |
+| MCP for LLM and AI agent workflows | No | No | Yes |
+| OpenAPI surface for standard HTTP tooling | No | Usually no | Yes |
+| VM and LXC operations in one interface | Low-level only | Depends | Yes |
+| Snapshot, backup, and restore workflows | Low-level only | Depends | Yes |
+| Persistent async job tracking and retry | No | Rare | Yes |
+| Container command execution with policy controls | No | Custom only | Yes |
+| Docker distribution path | No | Rare | Yes |
+| Repository-level live-environment verification | N/A | Rare | Yes |
+
+## Scenario Templates
+
+Ready-to-copy examples live in [`docs/examples/`](docs/examples/README.md):
+
+- [Create a test VM](docs/examples/create-test-vm.md)
+- [Roll back a risky change with snapshots](docs/examples/rollback-snapshot.md)
+- [Download an ISO and create an LXC](docs/examples/download-iso-and-create-lxc.md)
+
+These are written for both human operators and LLM-driven usage.
+
+## Documentation
+
+The README is intentionally optimized for fast GitHub comprehension. Longer operational docs live in `docs/wiki/` and can also be published to the GitHub Wiki.
+
+| If you need to... | Start here |
+| --- | --- |
+| Understand the project and deployment flow | [Wiki Home](docs/wiki/Home.md) |
+| Configure and run against a Proxmox environment | [Operator Guide](docs/wiki/Operator%20Guide.md) |
+| Connect Claude Desktop or Open WebUI | [Integrations Guide](docs/wiki/Integrations%20Guide.md) |
+| Install from MCP-aware IDEs and agents | [Agent Installation](docs/agent-installation.md) |
+| Enable LXC command execution over SSH | [Container Command Execution](docs/container-command-execution.md) |
+| Review security and command policy | [Security Guide](docs/wiki/Security%20Guide.md) |
+| Inspect tool parameters, prerequisites, and behavior | [API & Tool Reference](docs/wiki/API%20%26%20Tool%20Reference.md) |
+| Debug startup, auth, or health issues | [Troubleshooting](docs/wiki/Troubleshooting.md) |
+| Work on the codebase or release it | [Developer Guide](docs/wiki/Developer%20Guide.md) |
+| Review release and upgrade notes | [Release & Upgrade Notes](docs/wiki/Release%20%26%20Upgrade%20Notes.md) |
+
+Published wiki:
+
+- [GitHub Wiki Home](https://github.com/RekklesNA/ProxmoxMCP-Plus/wiki/Home)
+
+## Repo Layout
+
+- `src/proxmox_mcp/`: MCP server, config loading, security, OpenAPI bridge
+- `main.py`: MCP entrypoint for local and client-driven usage
+- `docker-compose.yml`: HTTP/OpenAPI runtime
+- `requirements/`: auxiliary dependency sources and runtime install lists
+- `scripts/`: helper startup scripts for local workflows
+- `tests/scripts/run_real_e2e.py`: live Proxmox and Docker/OpenAPI path
+- `tests/`: unit and integration coverage
+- `docs/examples/`: scenario-driven prompts and HTTP examples
+- `docs/wiki/`: longer-form operator, integration, and reference docs
+
+## Development Checks
+
 ```bash
-# View service logs
-tail -f proxmox_mcp.log
-
-# Docker logs
-docker logs proxmox-mcp-api -f
+pytest -q --cov=proxmox_mcp --cov-report=term-missing --cov-fail-under=60
+ruff check .
+mypy src --ignore-missing-imports
+pip-audit -r requirements.txt --ignore-vuln CVE-2026-44405
+python -m build
 ```
 
-## Deployment Status
-
-### Feature Completion Status
-
-- [x] VM Creation (user requirement: 1 CPU + 2GB RAM + 10GB storage)
-- [x] VM Power Management (start VPN-Server ID:101)
-- [x] VM Deletion Feature
-- [x] Container Management (LXC)
-- [x] Container Creation and Deletion
-- [x] Snapshot Management (create, delete, rollback)
-- [x] Backup and Restore
-- [x] ISO and Template Management
-- [x] Storage Compatibility (LVM/file-based)
-- [x] OpenAPI Integration (port 8811)
-- [x] Open WebUI Integration
-- [x] Error Handling & Validation
-- [x] Complete Documentation & Testing
-
-### Production Readiness
-
-ProxmoxMCP Plus is ready for production deployment. The system supports natural language VM creation requests through AI assistants. When a user requests VM creation (e.g., "create a VM with 1 cpu core and 2 GB ram with 10GB of storage disk"), the system will:
-
-1. Call the `create_vm` API endpoint
-2. Automatically select appropriate storage and format
-3. Create VMs matching the specified requirements
-4. Return detailed configuration information
-5. Provide next-step recommendations
-
-## Development
-
-After activating your virtual environment:
-
-- Run tests: `pytest`
-- Format code: `black .`
-- Type checking: `mypy .`
-- Lint: `ruff .`
+The Paramiko audit exception is temporary. It is tracked in `docs/security/paramiko-cve-2026-44405.md` until a patched PyPI release is available.
 
 ## License
 
-MIT License
-
-## Special Thanks
-
-- [@canvrno](https://github.com/canvrno) for the foundational project [ProxmoxMCP](https://github.com/canvrno/ProxmoxMCP)
-- Thanks to the Proxmox community for providing the powerful virtualization platform
-- Thanks to all contributors and users for their support
-
----
-
-ProxmoxMCP Plus with OpenAPI integration is ready for production deployment.
+[MIT](LICENSE)

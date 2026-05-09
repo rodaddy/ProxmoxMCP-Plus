@@ -16,8 +16,7 @@ The logging system supports:
 """
 import logging
 import os
-from typing import Optional
-from ..config.models import LoggingConfig
+from proxmox_mcp.config.models import LoggingConfig
 
 def setup_logging(config: LoggingConfig) -> logging.Logger:
     """Configure and initialize logging system.
@@ -60,12 +59,21 @@ def setup_logging(config: LoggingConfig) -> logging.Logger:
         log_file = os.path.join(os.getcwd(), log_file)
         
     # Create handlers
-    handlers = []
+    handlers: list[logging.Handler] = []
     
     if log_file:
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setLevel(getattr(logging, config.level.upper()))
-        handlers.append(file_handler)
+        try:
+            # Ensure directory exists
+            log_dir = os.path.dirname(log_file)
+            if log_dir and not os.path.exists(log_dir):
+                os.makedirs(log_dir, exist_ok=True)
+                
+            file_handler = logging.FileHandler(log_file)
+            file_handler.setLevel(getattr(logging, config.level.upper()))
+            handlers.append(file_handler)
+        except Exception:
+            # Fallback for restricted environments
+            pass
     
     # Console handler for errors only
     console_handler = logging.StreamHandler()
@@ -80,10 +88,6 @@ def setup_logging(config: LoggingConfig) -> logging.Logger:
     # Configure root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(getattr(logging, config.level.upper()))
-    
-    # Remove any existing handlers
-    for handler in root_logger.handlers[:]:
-        root_logger.removeHandler(handler)
     
     # Add new handlers
     for handler in handlers:

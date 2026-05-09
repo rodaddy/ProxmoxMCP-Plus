@@ -14,7 +14,8 @@ across the MCP server.
 import logging
 from typing import Dict, Any
 from proxmoxer import ProxmoxAPI
-from ..config.models import ProxmoxConfig, AuthConfig
+from proxmox_mcp.config.models import ProxmoxConfig, AuthConfig
+from proxmox_mcp.core.ssh_tunnel import SSHTunnelManager
 
 class ProxmoxManager:
     """Manager class for Proxmox API operations.
@@ -29,7 +30,13 @@ class ProxmoxManager:
     ensuring proper initialization and error handling for all API operations.
     """
     
-    def __init__(self, proxmox_config: ProxmoxConfig, auth_config: AuthConfig):
+    def __init__(
+        self,
+        proxmox_config: ProxmoxConfig,
+        auth_config: AuthConfig,
+        api_tunnel_config: Any | None = None,
+        ssh_config: Any | None = None,
+    ):
         """Initialize the Proxmox API manager.
 
         Args:
@@ -37,6 +44,10 @@ class ProxmoxManager:
             auth_config: Authentication configuration
         """
         self.logger = logging.getLogger("proxmox-mcp.proxmox")
+        self.api_tunnel_config = api_tunnel_config
+        self.tunnel_manager = SSHTunnelManager(api_tunnel_config, ssh_config) if api_tunnel_config is not None else None
+        if self.tunnel_manager is not None:
+            self.tunnel_manager.ensure_tunnel()
         self.config = self._create_config(proxmox_config, auth_config)
         self.api = self._setup_api()
 
@@ -57,9 +68,21 @@ class ProxmoxManager:
         Returns:
             Dictionary containing merged configuration ready for API initialization
         """
+        host = proxmox_config.host
+        port = proxmox_config.port
+        if self.api_tunnel_config is not None and getattr(self.api_tunnel_config, "enabled", False):
+            host = self.api_tunnel_config.local_host
+            port = self.api_tunnel_config.local_port
+            self.logger.info(
+                "Using local Proxmox API tunnel endpoint: %s:%s",
+                host,
+                port,
+            )
+
         return {
-            'host': proxmox_config.host,
-            'port': proxmox_config.port,
+            'host': host,
+            'port': port,
+            'timeout': proxmox_config.timeout,
             'user': auth_config.user,
             'token_name': auth_config.token_name,
             'token_value': auth_config.token_value,
@@ -90,14 +113,14 @@ class ProxmoxManager:
             self.logger.info(f"Connecting to Proxmox host: {self.config['host']}")
             api = ProxmoxAPI(**self.config)
             
-            # Test connection
-            api.version.get()
-            self.logger.info("Successfully connected to Proxmox API")
+            # Connection test removed from startup for robustness.
+            # It will fail gracefully later if credentials are wrong.
+            # api.version.get() 
             
             return api
         except Exception as e:
-            self.logger.error(f"Failed to connect to Proxmox: {e}")
-            raise RuntimeError(f"Failed to connect to Proxmox: {e}")
+            self.logger.error(f"Failed to initialize Proxmox API client: {e}")
+            raise RuntimeError(f"Failed to initialize Proxmox API client: {e}") from e
 
     def get_api(self) -> ProxmoxAPI:
         """Get the initialized Proxmox API instance.

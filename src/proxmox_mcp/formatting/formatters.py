@@ -1,9 +1,7 @@
-"""
-Core formatting functions for Proxmox MCP output.
-"""
-from typing import List, Union, Dict, Any
-from .theme import ProxmoxTheme
-from .colors import ProxmoxColors
+"""Core formatting functions for Proxmox MCP output."""
+from typing import Optional
+from proxmox_mcp.formatting.theme import ProxmoxTheme
+from proxmox_mcp.formatting.colors import ProxmoxColors
 
 class ProxmoxFormatters:
     """Core formatting functions for Proxmox data."""
@@ -18,11 +16,12 @@ class ProxmoxFormatters:
         Returns:
             Formatted string with appropriate unit
         """
+        value = float(bytes_value)
         for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-            if bytes_value < 1024:
-                return f"{bytes_value:.2f} {unit}"
-            bytes_value /= 1024
-        return f"{bytes_value:.2f} TB"
+            if value < 1024:
+                return f"{value:.2f} {unit}"
+            value /= 1024
+        return f"{value:.2f} TB"
     
     @staticmethod
     def format_uptime(seconds: int) -> str:
@@ -106,7 +105,7 @@ class ProxmoxFormatters:
         """
         emoji = ProxmoxTheme.get_section_emoji(section_type)
         header = f"{emoji} {title}"
-        border = "═" * len(header)
+        border = "=" * len(header)
         return f"\n{header}\n{border}\n"
     
     @staticmethod
@@ -126,7 +125,12 @@ class ProxmoxFormatters:
         return f"{prefix}{key_str}: {value}"
     
     @staticmethod
-    def format_command_output(success: bool, command: str, output: str, error: str = None) -> str:
+    def format_command_output(
+        success: bool,
+        command: str,
+        output: str,
+        error: Optional[str] = None,
+    ) -> str:
         """Format command execution output.
         
         Args:
@@ -140,8 +144,8 @@ class ProxmoxFormatters:
         """
         result = [
             f"{ProxmoxTheme.ACTIONS['command']} Console Command Result",
-            f"  • Status: {'SUCCESS' if success else 'FAILED'}",
-            f"  • Command: {command}",
+            f"  - Status: {'SUCCESS' if success else 'FAILED'}",
+            f"  - Command: {command}",
             "",
             "Output:",
             output.strip()
