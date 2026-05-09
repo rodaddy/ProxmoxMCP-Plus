@@ -1,34 +1,27 @@
-# Use Python 3.11 slim image as base
 FROM python:3.11-slim
 
-# Set working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    git \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-RUN pip install mcpo uv
-
-# Copy project files
 COPY . .
 
-# Create virtual environment and install dependencies
-RUN uv venv && \
-    . .venv/bin/activate && \
-    uv pip install -e ".[dev]"
+RUN python -m pip install --no-cache-dir --upgrade pip \
+    && python -m pip install --no-cache-dir .
 
-# Expose port
-EXPOSE 8811
+RUN useradd --create-home --shell /usr/sbin/nologin proxmoxmcp \
+    && chown -R proxmoxmcp:proxmoxmcp /app
 
-# Set environment variables
+USER proxmoxmcp
+
+EXPOSE 8811 8000
+
 ENV PROXMOX_MCP_CONFIG="/app/proxmox-config/config.json"
+ENV PROXMOX_MCP_MODE="openapi"
 ENV API_HOST="0.0.0.0"
 ENV API_PORT="8811"
 
-# Startup command
-CMD ["mcpo", "--host", "0.0.0.0", "--port", "8811", "--", \
-     "/bin/bash", "-c", "cd /app && source .venv/bin/activate && python -m proxmox_mcp.server"]
+CMD ["python", "-m", "proxmox_mcp.docker_entrypoint"]

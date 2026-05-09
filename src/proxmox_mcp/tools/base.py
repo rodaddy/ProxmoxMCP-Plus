@@ -11,10 +11,12 @@ All tool implementations inherit from the ProxmoxTool base class to ensure
 consistent behavior and error handling across the MCP server.
 """
 import logging
-from typing import Any, Dict, List, Optional, Union
+import time
+from typing import Any, Callable, Dict, List, NoReturn, Optional
 from mcp.types import TextContent as Content
 from proxmoxer import ProxmoxAPI
-from ..formatting import ProxmoxTemplates
+from proxmox_mcp.formatting import ProxmoxTemplates
+from proxmox_mcp.observability import ToolMetrics
 
 class ProxmoxTool:
     """Base class for Proxmox MCP tools.
@@ -29,7 +31,12 @@ class ProxmoxTool:
     behavior and error handling across the MCP server.
     """
 
-    def __init__(self, proxmox_api: ProxmoxAPI):
+    def __init__(
+        self,
+        proxmox_api: ProxmoxAPI,
+        metrics: Optional[ToolMetrics] = None,
+        job_store: Optional[Any] = None,
+    ):
         """Initialize the tool.
 
         Args:
@@ -37,6 +44,39 @@ class ProxmoxTool:
         """
         self.proxmox = proxmox_api
         self.logger = logging.getLogger(f"proxmox-mcp.{self.__class__.__name__.lower()}")
+        self._cache: Dict[str, tuple[float, Any]] = {}
+        self.metrics = metrics
+        self.job_store = job_store
+
+    def _cache_get(self, key: str) -> Any:
+        entry = self._cache.get(key)
+        if not entry:
+            return None
+        expires_at, value = entry
+        if time.time() >= expires_at:
+            self._cache.pop(key, None)
+            return None
+        return value
+
+    def _cache_set(self, key: str, value: Any, ttl_seconds: int = 5) -> None:
+        self._cache[key] = (time.time() + ttl_seconds, value)
+
+    def _call_with_retry(
+        self,
+        operation: str,
+        fn: Callable[[], Any],
+        retries: int = 2,
+        backoff_seconds: float = 0.2,
+    ) -> Any:
+        attempt = 0
+        while True:
+            try:
+                return fn()
+            except Exception as error:
+                attempt += 1
+                if attempt > retries:
+                    self._handle_error(operation, error)
+                time.sleep(backoff_seconds * attempt)
 
     def _format_response(self, data: Any, resource_type: Optional[str] = None) -> List[Content]:
         """Format response data into MCP content using templates.
@@ -77,7 +117,7 @@ class ProxmoxTool:
 
         return [Content(type="text", text=formatted)]
 
-    def _handle_error(self, operation: str, error: Exception) -> None:
+    def _handle_error(self, operation: str, error: Exception) -> NoReturn:
         """Handle and log errors from Proxmox operations.
 
         Provides standardized error handling across all tools by:
@@ -104,3 +144,30 @@ class ProxmoxTool:
             raise ValueError(f"Invalid input: {error_msg}")
         
         raise RuntimeError(f"Failed to {operation}: {error_msg}")
+
+    def _register_background_job(
+        self,
+        *,
+        tool_name: str,
+        summary: str,
+        node: Optional[str],
+        upid: Optional[Any],
+        metadata: Optional[Dict[str, Any]] = None,
+        retry_spec: Optional[Dict[str, Any]] = None,
+        retry_factory: Optional[Callable[[], Any]] = None,
+        cancel_factory: Optional[Callable[[str], Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        if self.job_store is None:
+            return None
+        if upid is None:
+            return None
+        return self.job_store.register_task(
+            tool_name=tool_name,
+            summary=summary,
+            node=node,
+            upid=str(upid),
+            metadata=metadata,
+            retry_spec=retry_spec,
+            retry_factory=retry_factory,
+            cancel_factory=cancel_factory,
+        )

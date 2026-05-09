@@ -2,6 +2,33 @@
 Tool descriptions for Proxmox MCP tools.
 """
 
+LIST_JOBS_DESC = """List tracked long-running jobs created by MCP tools.
+
+Parameters:
+status - Filter by job status (optional)
+tool_name - Filter by originating tool (optional)
+limit - Maximum rows to return (default: 100)
+"""
+
+GET_JOB_DESC = """Get the current state of a tracked job by job_id.
+
+Parameters:
+job_id* - Stable job identifier returned by long-running tools
+refresh - Poll Proxmox before returning the job state (default: false)
+"""
+
+POLL_JOB_DESC = """Poll the backing Proxmox task for a tracked job and refresh status/progress."""
+
+CANCEL_JOB_DESC = """Best-effort cancel for a tracked long-running job.
+
+This uses the stored Proxmox task UPID when cancellation is supported.
+"""
+
+RETRY_JOB_DESC = """Retry a tracked long-running job using its stored retry recipe.
+
+The same job_id is preserved and its attempt counter is incremented.
+"""
+
 # Node tool descriptions
 GET_NODES_DESC = """List all nodes in the Proxmox cluster with their status, CPU, memory, and role information.
 
@@ -38,6 +65,22 @@ network_bridge - Network bridge name (optional, default: 'vmbr0')
 Examples:
 - Create VM with 1 CPU, 2GB RAM, 10GB disk: node='pve', vmid='200', name='test-vm', cpus=1, memory=2048, disk_size=10
 - Create VM with 2 CPUs, 4GB RAM, 20GB disk: node='pve', vmid='201', name='web-server', cpus=2, memory=4096, disk_size=20"""
+
+CLONE_VM_DESC = """Clone an existing virtual machine.
+
+Parameters:
+node* - Source host node name that currently owns the VM (e.g. 'pve')
+source_vmid* - Existing source VM ID (e.g. '9000')
+target_vmid* - New VM ID for the clone (e.g. '201')
+name - New VM name (optional)
+target_node - Destination node for the clone (optional, defaults to source node)
+full - Full clone (true, default) or linked clone (false)
+storage - Target storage (optional)
+pool - Target resource pool (optional)
+snapname - Snapshot name to clone from (optional)
+
+Example:
+clone_vm node='pve' source_vmid='9000' target_vmid='201' name='web-201' full=true"""
 
 EXECUTE_VM_COMMAND_DESC = """Execute commands in a VM via QEMU guest agent.
 
@@ -88,7 +131,7 @@ Reset VPN-Server with ID 101 on node pve"""
 
 DELETE_VM_DESC = """Delete/remove a virtual machine completely.
 
-⚠️ WARNING: This operation permanently deletes the VM and all its data!
+ WARNING: This operation permanently deletes the VM and all its data!
 
 Parameters:
 node* - Host node name (e.g. 'pve')
@@ -109,7 +152,7 @@ GET_CONTAINERS_DESC = """List LXC containers across the cluster (or filter by no
 
 Parameters:
 - node (optional): Node name to filter (e.g. 'pve1')
-- include_stats (bool, default true): Include live CPU/memory stats
+- include_stats (bool, default false): Fetch per-container live CPU/memory stats
 - include_raw (bool, default false): Include raw Proxmox API payloads for debugging
 - format_style ('pretty'|'json', default 'pretty'): Pretty text or raw JSON list
 
@@ -160,6 +203,8 @@ password - Root password (optional)
 ssh_public_keys - SSH public keys for root user (optional)
 network_bridge - Network bridge name (optional, default: 'vmbr0')
 start_after_create - Start container after creation (optional, default: false)
+onboot - Start container automatically on host boot (optional, default: false)
+nesting - Enable LXC nesting (optional, sets features='nesting=1', default: false)
 unprivileged - Create unprivileged container (optional, default: true)
 
 Examples:
@@ -185,6 +230,22 @@ Examples:
 - Delete container 200: selector='200'
 - Delete by name: selector='my-container'
 - Force delete running container: selector='pve:201', force=True
+"""
+
+EXECUTE_CONTAINER_COMMAND_DESC = """Execute a shell command inside a running LXC container.
+
+No guest agent required - connects to the Proxmox node via SSH and uses `pct exec`.
+
+Parameters:
+selector* - Container selector: '123' | 'pve1:123' | 'pve1/name' | 'name'
+command*  - Shell command to run (e.g. 'uname -a', 'df -h')
+
+Example:
+{"success": true, "output": "Linux ct-101 6.1.0", "exit_code": 0}
+
+Requirements:
+- Container must be running
+- MCP config must include valid [ssh] credentials for the Proxmox nodes
 """
 
 # Storage tool descriptions
@@ -347,4 +408,43 @@ volid* - Backup volume ID to delete
 
 Example:
 delete_backup node='pve' storage='backup-storage' volid='backup:backup/vzdump-qemu-100-2024_01_15.vma.zst'
+"""
+
+# LXC config tools (no SSH required)
+GET_CONTAINER_CONFIG_DESC = """Get the full configuration of an LXC container.
+
+Returns network interfaces, mounts, features, CPU/memory limits, startup options and more.
+
+Parameters:
+node* - Proxmox node name (e.g. 'pve')
+vmid* - Container ID (e.g. '101')
+
+Example:
+{"vmid": "101", "hostname": "valkey", "cores": 1, "memory": 1024, "net0": "name=eth0,..."}
+"""
+
+GET_CONTAINER_IP_DESC = """Get the current IP address(es) of a running LXC container.
+
+Queries /nodes/{node}/lxc/{vmid}/interfaces - works with DHCP (no static IP needed).
+
+Parameters:
+node* - Proxmox node name (e.g. 'pve')
+vmid* - Container ID (e.g. '101')
+
+Returns:
+{"vmid": "101", "name": "valkey", "interfaces": [...], "primary_ip": "10.1.0.101"}
+"""
+
+UPDATE_CONTAINER_SSH_KEYS_DESC = """Inject or replace SSH authorized_keys for root in an LXC container.
+
+Uses pct exec via SSH to the Proxmox host - requires SSH to be configured.
+
+Parameters:
+node*        - Proxmox node name (e.g. 'pve')
+vmid*        - Container ID (e.g. '101')
+public_keys* - Newline-separated public key(s) to authorize
+mode         - 'append' (default) or 'replace'
+
+Returns:
+{"success": true, "keys_added": 1}
 """

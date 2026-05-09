@@ -12,8 +12,39 @@ and valid before the server starts operation.
 """
 import json
 import os
-from typing import Optional
-from .models import Config
+from typing import Any, Dict, Optional
+from proxmox_mcp.config.models import Config
+
+
+def _parse_csv_env(name: str) -> list[str] | None:
+    if name not in os.environ:
+        return None
+    return [item.strip() for item in os.environ[name].split(",") if item.strip()]
+
+
+def _apply_mcp_env_overrides(config_data: Dict[str, Any]) -> None:
+    """Allow deployment-specific MCP transport settings to override file config."""
+    env_map = {
+        "MCP_HOST": ("host", str),
+        "MCP_PORT": ("port", int),
+        "MCP_TRANSPORT": ("transport", str),
+    }
+    overrides = {
+        key: (coerce(os.environ[env_name]) if coerce is not str else os.environ[env_name])
+        for env_name, (key, coerce) in env_map.items()
+        if env_name in os.environ
+    }
+    if not overrides:
+        return
+
+    mcp_config = config_data.setdefault("mcp", {})
+    if not isinstance(mcp_config, dict):
+        raise ValueError("mcp config must be a JSON object when MCP_* overrides are used")
+
+    if "transport" in overrides and isinstance(overrides["transport"], str):
+        overrides["transport"] = overrides["transport"].strip().upper()
+    mcp_config.update(overrides)
+
 
 def load_config(config_path: Optional[str] = None) -> Config:
     """Load and validate configuration from JSON file.
@@ -59,16 +90,94 @@ def load_config(config_path: Optional[str] = None) -> Config:
                  - Required fields are missing
                  - Field values are invalid
     """
-    if not config_path:
-        raise ValueError("PROXMOX_MCP_CONFIG environment variable must be set")
+    config_data: Dict[str, Any]
+    if not config_path or not os.path.exists(config_path):
+        # Fallback to environment variables
+        log_level_raw = os.getenv("LOG_LEVEL")
+        command_policy = {
+            'mode': os.getenv("COMMAND_POLICY_MODE", "deny_all"),
+            'allow_patterns': _parse_csv_env("COMMAND_POLICY_ALLOW_PATTERNS") or [],
+            'require_approval_token': os.getenv("COMMAND_POLICY_REQUIRE_APPROVAL_TOKEN", "false").lower() == "true",
+            'approval_token': os.getenv("COMMAND_POLICY_APPROVAL_TOKEN"),
+            'high_risk_mode': os.getenv("COMMAND_POLICY_HIGH_RISK_MODE", "audit_only"),
+            'high_risk_require_approval_token': os.getenv("COMMAND_POLICY_HIGH_RISK_REQUIRE_APPROVAL_TOKEN", "false").lower() == "true",
+            'high_risk_approval_token': os.getenv("COMMAND_POLICY_HIGH_RISK_APPROVAL_TOKEN"),
+        }
+        deny_patterns = _parse_csv_env("COMMAND_POLICY_DENY_PATTERNS")
+        if deny_patterns is not None:
+            command_policy["deny_patterns"] = deny_patterns
+        high_risk_operations = _parse_csv_env("COMMAND_POLICY_HIGH_RISK_OPERATIONS")
+        if high_risk_operations is not None:
+            command_policy["high_risk_operations"] = high_risk_operations
+
+        config_data = {
+            'proxmox': {
+                'host': os.getenv("PROXMOX_HOST"),
+                'port': int(os.getenv("PROXMOX_PORT", "8006")),
+                'timeout': int(os.getenv("PROXMOX_TIMEOUT", "30")),
+                'verify_ssl': os.getenv("PROXMOX_VERIFY_SSL", "true").lower() == "true",
+                'service': os.getenv("PROXMOX_SERVICE", "PVE")
+            },
+            'auth': {
+                'user': os.getenv("PROXMOX_USER"),
+                'token_name': os.getenv("PROXMOX_TOKEN_NAME"),
+                'token_value': os.getenv("PROXMOX_TOKEN_VALUE")
+            },
+            'api_tunnel': {
+                'enabled': os.getenv("PROXMOX_API_TUNNEL_ENABLED", "false").lower() == "true",
+                'ssh_host': os.getenv("PROXMOX_API_TUNNEL_SSH_HOST"),
+                'local_host': os.getenv("PROXMOX_API_TUNNEL_LOCAL_HOST", "127.0.0.1"),
+                'local_port': int(os.getenv("PROXMOX_API_TUNNEL_LOCAL_PORT", os.getenv("PROXMOX_PORT", "8006"))),
+                'remote_host': os.getenv("PROXMOX_API_TUNNEL_REMOTE_HOST", "127.0.0.1"),
+                'remote_port': int(os.getenv("PROXMOX_API_TUNNEL_REMOTE_PORT", "8006")),
+                'connect_timeout': int(os.getenv("PROXMOX_API_TUNNEL_CONNECT_TIMEOUT", "15")),
+            },
+            'logging': {
+                'level': log_level_raw.upper() if log_level_raw and not log_level_raw.startswith("${") else "INFO"
+            },
+            'mcp': {
+                'host': os.getenv("MCP_HOST", "0.0.0.0"),
+                'port': int(os.getenv("MCP_PORT", "8000")),
+                'transport': os.getenv("MCP_TRANSPORT", "stdio").upper() if os.getenv("MCP_TRANSPORT") else "STDIO"
+            },
+            'security': {
+                'dev_mode': os.getenv("PROXMOX_DEV_MODE", "false").lower() == "true",
+            },
+            'jobs': {
+                'sqlite_path': os.getenv("PROXMOX_JOBS_SQLITE_PATH", "proxmox-jobs.sqlite3"),
+            },
+            'command_policy': command_policy,
+        }
+        
+        api_tunnel_config = config_data.get("api_tunnel")
+        if isinstance(api_tunnel_config, dict) and not api_tunnel_config.get("ssh_host"):
+            config_data.pop("api_tunnel", None)
+    else:
+        try:
+            with open(config_path) as f:
+                config_data = json.load(f)
+                if not isinstance(config_data, dict):
+                    raise ValueError("Config root must be a JSON object")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON in config file: {e}")
+        except Exception as e:
+            raise ValueError(f"Failed to load config: {e}")
+
+    _apply_mcp_env_overrides(config_data)
+
+    # Final validation check
+    if not config_data.get('proxmox', {}).get('host'):
+        raise ValueError("Proxmox host must be provided (via config file or PROXMOX_HOST env var)")
+    if not config_data.get('auth', {}).get('user'):
+        raise ValueError("Authentication credentials must be provided")
 
     try:
-        with open(config_path) as f:
-            config_data = json.load(f)
-            if not config_data.get('proxmox', {}).get('host'):
-                raise ValueError("Proxmox host cannot be empty")
-            return Config(**config_data)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON in config file: {e}")
+        config = Config.model_validate(config_data)
+        if not config.proxmox.verify_ssl and not config.security.dev_mode:
+            raise ValueError(
+                "Insecure TLS configuration blocked: set proxmox.verify_ssl=true. "
+                "Only dev_mode=true can allow verify_ssl=false."
+            )
+        return config
     except Exception as e:
-        raise ValueError(f"Failed to load config: {e}")
+        raise ValueError(f"Configuration validation failed: {e}")

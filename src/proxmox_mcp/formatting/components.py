@@ -2,8 +2,8 @@
 Reusable UI components for Proxmox MCP output.
 """
 from typing import List, Optional
-from .colors import ProxmoxColors
-from .theme import ProxmoxTheme
+from proxmox_mcp.formatting.colors import ProxmoxColors
+from proxmox_mcp.formatting.theme import ProxmoxTheme
 
 class ProxmoxComponents:
     """Reusable UI components for formatted output."""
@@ -56,21 +56,22 @@ class ProxmoxComponents:
         # Add rows with multi-line cell support
         for row in rows:
             # Split each cell into lines
-            cell_lines = [str(cell).split('\n') for cell in row]
-            max_lines = max(len(lines) for lines in cell_lines)
+            row_cell_lines = [str(cell).split('\n') for cell in row]
+            max_lines = max(len(lines) for lines in row_cell_lines)
             
             # Pad cells with fewer lines
-            padded_cells = []
-            for lines in cell_lines:
-                if len(lines) < max_lines:
-                    lines.extend([''] * (max_lines - len(lines)))
-                padded_cells.append(lines)
+            padded_cells: List[List[str]] = []
+            for cell_line_group in row_cell_lines:
+                normalized = list(cell_line_group)
+                if len(normalized) < max_lines:
+                    normalized.extend([''] * (max_lines - len(normalized)))
+                padded_cells.append(normalized)
             
             # Create row strings for each line
             for line_idx in range(max_lines):
                 line_parts = []
-                for col_idx, cell_lines in enumerate(padded_cells):
-                    line = cell_lines[line_idx]
+                for col_idx, padded_line_group in enumerate(padded_cells):
+                    line = padded_line_group[line_idx]
                     line_parts.append(f" {line:<{widths[col_idx]}} ")
                 result.append("|" + "|".join(line_parts) + "|")
             
@@ -97,7 +98,7 @@ class ProxmoxComponents:
         filled = int(width * percentage / 100)
         color = ProxmoxColors.metric_color(percentage)
         
-        bar = "█" * filled + "░" * (width - filled)
+        bar = "#" * filled + "-" * (width - filled)
         return f"{ProxmoxColors.colorize(bar, color)} {percentage:.1f}%"
     
     @staticmethod
@@ -113,14 +114,13 @@ class ProxmoxComponents:
         Returns:
             Formatted resource usage string
         """
-        from .formatters import ProxmoxFormatters
-        percentage = (used / total * 100) if total > 0 else 0
+        from proxmox_mcp.formatting.formatters import ProxmoxFormatters
         progress = ProxmoxComponents.create_progress_bar(used, total)
         
         return (
             f"{emoji} {label}:\n"
             f"  {progress}\n"
-            f"  {ProxmoxFormatters.format_bytes(used)} / {ProxmoxFormatters.format_bytes(total)}"
+            f"  {ProxmoxFormatters.format_bytes(int(used))} / {ProxmoxFormatters.format_bytes(int(total))}"
         )
     
     @staticmethod
