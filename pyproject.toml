@@ -46,6 +46,26 @@ dev = [
     "types-requests>=2.31.0,<3.0.0",
 ]
 
+# MCP 2026-07-28 (SDK v2) path -- ADDITIVE, installed into its OWN environment.
+#
+# The base `dependencies` pin `mcp>=1.8.0,<2.0.0` because `proxmox_mcp.server`
+# imports `mcp.server.fastmcp`, which does not exist in 2.x (no alias, no
+# shim). The two SDK majors therefore CANNOT share one environment, and this
+# extra deliberately conflicts with the base pin -- installing it into the v1
+# environment would break the running server.
+#
+# Build it separately:
+#     uv venv .venv-v2 && uv pip install --python .venv-v2 -e ".[v2]" \
+#         --override overrides-v2.txt
+#
+# The version is pinned EXACTLY, not floated: `proxmox_mcp.strictness` reaches
+# through `MCPServer._tool_manager`, a private SDK surface, because 2.0.0
+# exposes no author-facing hook for schema strictness. A floating pin would let
+# that surface move underneath us at install time.
+v2 = [
+    "mcp==2.0.0",
+]
+
 [project.urls]
 Homepage = "https://github.com/yourusername/proxmox-mcp"
 Documentation = "https://github.com/yourusername/proxmox-mcp#readme"
