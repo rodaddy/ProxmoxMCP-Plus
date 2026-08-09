@@ -1,0 +1,10 @@
+# Dependency override for the MCP 2026-07-28 (SDK v2) environment ONLY.
+#
+# The base project pins `mcp>=1.8.0,<2.0.0` for the v1 server. Building the v2
+# environment needs that ceiling lifted, and an override is the honest way to
+# say so: it lifts the bound for THIS environment without editing the pin that
+# protects the running v1 server.
+#
+# Used only by the `.venv-v2` build documented in pyproject.toml `[v2]`.
+# Never apply this to the v1 environment.
+mcp==2.0.0
